@@ -181,12 +181,9 @@ class dumpNAVI:
       print 'Unable to locate o32offset'
       return 0
 
-    #self.f.seek(-1, os.SEEK_CUR)
-
     for j in range(e32hdr.e32_objcnt):
       o = o32_rom()
       data = self.virtualRead(sizeof(o32_rom))
-#      print hexlify(data)
       o.receiveSome(data)
       o32hdr.append(o)
       
@@ -397,10 +394,6 @@ class dumpNAVI:
           for fn in options.EXTRACT:
             if fn == module.filename:
               self.extractModule(module)
-
-def uint(data):
-  val = struct.unpack_from('<I',data)
-  return val[0]
 
 def main():
   navi = dumpNAVI(options.FILE)
