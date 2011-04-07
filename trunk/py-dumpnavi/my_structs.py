@@ -109,14 +109,6 @@ class xipHdr(Structure, StructHelper):
               ('imageaddr', c_uint32),
               ('imagelen', c_uint32)]
 
-#  def __str__(self):
-#    return 'imageaddr: %08X\nimagelen: %08X\nblockstart: %08X\nblocklength: %0x8X' % (self.imageaddr, self.imagelen,
-#                                                                                     self.blockstart, self.blocklength)
-
-class xipChainEntry(Structure, StructHelper):
-  pass
-#<TBD>
-
 class ececHdr(Structure, StructHelper):
   _fields_ = [('ECEC', c_ubyte*4),
               ('romhdraddr', c_uint32)]
@@ -186,12 +178,6 @@ class fileHdr(Structure, StructHelper):
 
   def __str__(self):
     return 'attr:\t0x%08X\ntime:\t0x%08X\ntime2:\t0x%08X\nsize:\t0x%08X\nsize2:\t0x%08X\nfileaddr:\t0x%08X\noffset:\t0x%08X' % ( self.attr, self.time, self.time2, self.size, self.size2, self.fileaddr, self.offset)
-
-class copyEntry(Structure, StructHelper):
-  _fields_ = [('source', c_uint32),
-              ('dest', c_uint32),
-              ('copylen', c_uint32),
-              ('destlen', c_uint32)]
 
 class e32_info(Structure, StructHelper):
   _fields_ = [('rva', c_uint32),
