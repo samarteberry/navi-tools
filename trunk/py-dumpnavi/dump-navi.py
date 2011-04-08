@@ -56,33 +56,43 @@ class dumpNAVI:
   virtualpos = 0
   blockstartpos = 0
   blocklen = 0
+  filesize = 0
 
   xiphdr = xipHdr()
   ecechdr = ececHdr()
   romhdr = romHdr()
 
   def __init__(self, fileName):
+    self.filesize = os.path.getsize(fileName)
     self.f = open(fileName, 'rb')
+    
 
+  # added to address python deficiency that allows you to seek past the end of the file
+  def safeSeek(self, addr, mode=os.SEEK_CUR):
+    self.f.seek(addr, mode)
+    if self.f.tell() > self.filesize:
+      raise IOError('Attempted to seek past end of file')
+    
   def virtualSeek(self, addr):
     self.f.seek(self.blockstart, 0)
+
     while 1:
       b = blockHdr()
       self.blockstartpos = self.f.tell()
       data = self.f.read(sizeof(blockHdr))
       b.receiveSome(data)
       
-      if b.addr == None:
+      if b.addr == None or b.addr == 0:
         break
 
       if addr >= b.addr and addr < b.addr + b.length:
         a = addr - b.addr
-        self.f.seek(a, os.SEEK_CUR)
+        self.safeSeek(a, os.SEEK_CUR)
         self.blocklen = b.length - a
         self.virtualpos = addr
         return self.blocklen
       
-      self.f.seek(b.length, os.SEEK_CUR)
+      self.safeSeek(b.length, os.SEEK_CUR)
 
     self.blocklen = 0
     self.blockstartpos = 0
@@ -368,7 +378,6 @@ class dumpNAVI:
       data = self.virtualRead(sizeof(moduleHdr))
       m.receiveSome(data)
       self.modules.append(m)
-    self.files = []
     
     for module in self.modules:
       if self.virtualSeek(module.fileaddr) == 0:
