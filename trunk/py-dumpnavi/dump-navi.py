@@ -74,6 +74,7 @@ class dumpNAVI:
       raise IOError('Attempted to seek past end of file')
     
   def virtualSeek(self, addr):
+    #print '%08X' % addr
     self.f.seek(self.blockstart, 0)
 
     while 1:
@@ -83,6 +84,7 @@ class dumpNAVI:
       b.receiveSome(data)
       
       if b.addr == None or b.addr == 0:
+#        print 'hi'
         break
 
       if addr >= b.addr and addr < b.addr + b.length:
@@ -93,11 +95,12 @@ class dumpNAVI:
         return self.blocklen
       
       self.safeSeek(b.length, os.SEEK_CUR)
+#      print '%08X' % self.f.tell()
 
     self.blocklen = 0
     self.blockstartpos = 0
     self.virtualpos = 0
-    return blocklen
+    return self.blocklen
 
   def virtualRead(self, size):
     data = ''
@@ -124,7 +127,7 @@ class dumpNAVI:
           return data
         size = size - a
         self.virtualpos = self.virtualpos + a
-      if self.virtualSeek(self.virtualpos) > 0:
+      if self.virtualSeek(self.virtualpos) == 0:
         break
     return data
 
