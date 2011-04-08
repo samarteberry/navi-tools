@@ -155,10 +155,9 @@ class moduleHdr(Structure, StructHelper):
               ('loadoffset', c_uint32)]
   filename = None
 
-# compress attribute only tells if the file is compressed.. not sure how module compression works
   def __str__(self):
     return '%c%c%c%c%10d%10s%22s (ROM 0x%08x)' % (
-      'C' if self.attr & FILEATTR_COMPRESS else '_',
+      'C' if self.attr & FILEATTR_COMPRESS_MODULE else '_',
       'H' if self.attr & FILEATTR_HIDDEN else '_',
       'R' if self.attr & FILEATTR_READONLY else '_',
       'S' if self.attr & FILEATTR_SYSTEM else '_',
@@ -174,10 +173,19 @@ class fileHdr(Structure, StructHelper):
               ('size', c_uint32),
               ('size2', c_uint32),
               ('fileaddr', c_char_p),
-              ('offset', c_uint32)]
+              ('loadoffset', c_uint32)]
+  filename = None
 
   def __str__(self):
-    return 'attr:\t0x%08X\ntime:\t0x%08X\ntime2:\t0x%08X\nsize:\t0x%08X\nsize2:\t0x%08X\nfileaddr:\t0x%08X\noffset:\t0x%08X' % ( self.attr, self.time, self.time2, self.size, self.size2, self.fileaddr, self.offset)
+    return '%c%c%c%c%10d%10s%22s (ROM 0x%08x)' % (
+      'C' if self.attr & FILEATTR_COMPRESS else '_',
+      'H' if self.attr & FILEATTR_HIDDEN else '_',
+      'R' if self.attr & FILEATTR_READONLY else '_',
+      'S' if self.attr & FILEATTR_SYSTEM else '_',
+      self.size,
+      self.size2,
+      self.filename,
+      self.loadoffset)  
 
 class e32_info(Structure, StructHelper):
   _fields_ = [('rva', c_uint32),
