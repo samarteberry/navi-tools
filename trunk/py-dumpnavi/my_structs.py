@@ -115,7 +115,7 @@ class ececHdr(Structure, StructHelper):
   def __str__(self):
     return 'romhdraddr: %08X' % (self.romhdraddr)
 
-class romHdr(Structure, StructHelper):
+class romHdr(Structure, StructHelper): 
   _fields_ = [('dllfirst', c_uint32),
               ('dlllast', c_uint32),
               ('physfirst', c_uint32),
@@ -172,7 +172,7 @@ class fileHdr(Structure, StructHelper):
               ('time2', c_uint32),
               ('size', c_uint32),
               ('size2', c_uint32),
-              ('fileaddr', c_char_p),
+              ('fileaddr', c_uint32),
               ('loadoffset', c_uint32)]
   filename = None
 

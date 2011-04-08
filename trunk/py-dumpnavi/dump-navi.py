@@ -61,6 +61,9 @@ class dumpNAVI:
   xiphdr = xipHdr()
   ecechdr = ececHdr()
   romhdr = romHdr()
+  
+  modules = []
+  files = []
 
   def __init__(self, fileName):
     self.filesize = os.path.getsize(fileName)
@@ -77,17 +80,16 @@ class dumpNAVI:
     #print '%08X' % addr
     self.f.seek(self.blockstart, 0)
 
-    while 1:
+    data = self.f.read(sizeof(blockHdr))    
+    while data != '':
       b = blockHdr()
       self.blockstartpos = self.f.tell()
-      data = self.f.read(sizeof(blockHdr))
       b.receiveSome(data)
       
-      if b.addr == None or b.addr == 0:
-#        print 'hi'
+      if b.addr == 0:
         break
 
-      if addr >= b.addr and addr < b.addr + b.length:
+      if addr >= b.addr and (addr < b.addr + b.length):
         a = addr - b.addr
         self.safeSeek(a, os.SEEK_CUR)
         self.blocklen = b.length - a
@@ -95,7 +97,7 @@ class dumpNAVI:
         return self.blocklen
       
       self.safeSeek(b.length, os.SEEK_CUR)
-#      print '%08X' % self.f.tell()
+      data = self.f.read(sizeof(blockHdr))      
 
     self.blocklen = 0
     self.blockstartpos = 0
@@ -375,11 +377,9 @@ class dumpNAVI:
       print 'Unable to read block file\n'
       return 0
     
-    self.modules = []
     for i in range(self.romhdr.nummods):
       m = moduleHdr()
-      data = self.virtualRead(sizeof(moduleHdr))
-      m.receiveSome(data)
+      m.receiveSome(self.virtualRead(sizeof(moduleHdr)))
       self.modules.append(m)
     
     for module in self.modules:
@@ -408,6 +408,32 @@ class dumpNAVI:
             if fn == module.filename:
               self.extractModule(module)
 
+  def readFiles(self):
+    if self.virtualSeek(self.ecechdr.romhdraddr) + sizeof(romHdr) + (sizeof(moduleHdr)*self.romhdr.nummods) == 0:
+      print 'Unable to read block file'
+      return 0
+       
+    for i in range(self.romhdr.numfiles):
+      f = fileHdr()
+      f.receiveSome(self.virtualRead(sizeof(fileHdr)))
+      self.files.append(f)
+    
+    for f in self.files:
+      if self.virtualSeek(f.fileaddr) == 0:
+        print 'Unable to read block file'
+        continue
+      
+      name = ''
+      n = self.f.read(1)
+      while not n == '\00':
+        name = name + n
+        n = self.f.read(1)
+      f.filename = name
+    
+    if options.LIST:
+      for f in self.files:
+        print f
+  
 def main():
   navi = dumpNAVI(options.FILE)
   
@@ -424,6 +450,7 @@ def main():
     return 0
   
   navi.readModules()
+  navi.readFiles()
     
 def splitArgs(option, opt_str, value, parser):
   assert value is None
@@ -446,7 +473,7 @@ if __name__ == '__main__':
   parser = OptionParser()
   parser.add_option('-l', '--list', action='store_true', dest='LIST')
   parser.add_option('-e', '--extract', dest='EXTRACT',  action='callback', callback=splitArgs)
-  parser.add_option('-u', '--update', action='store_true', dest='UPDATE')
+  parser.add_option('-u', '--update', dest='UPDATE', action='callback', callback=splitArgs)
   parser.add_option('-o', '--output', action='store', type='string', dest='PATH')
   parser.add_option('-f', '--file', action='store', type='string', dest='FILE')
   (options, args) = parser.parse_args()
