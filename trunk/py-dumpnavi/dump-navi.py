@@ -1,4 +1,5 @@
-#!/usr/bin/wine c:\\Python27\\python.exe
+#!/usr/bin/python
+
 '''
 DumpNAVI port by aznoohwee85
 
@@ -44,7 +45,10 @@ from optparse import OptionParser
 from my_structs import *
 from ctypes import *
 
-lzx = windll.CECompress
+if sys.platform == 'win32':
+    lzx = windll.CECompress
+else:
+    lzx = None
 
 class dumpNAVI:
   f = None
@@ -86,19 +90,17 @@ class dumpNAVI:
     return blocklen
 
   def virtualRead(self, size):
-    data = None
+    data = ''
     origsize = size
     if self.virtualpos == 0:
       data = self.f.read(size)
-      if data == None:
-        return None
       return data
     if self.blocklen >= size:
       self.blocklen -= size
       self.virtualpos += size
       data = self.f.read(size)
-      if data == None:
-        return None
+      if data == '':
+        return data
       return data
     data = ''
     while size > 0:
@@ -108,8 +110,8 @@ class dumpNAVI:
         else:
           a = size
         data = data + self.f.read(a)
-        if data == None:
-          return None
+        if data == '':
+          return data
         size = size - a
         self.virtualpos = self.virtualpos + a
       if self.virtualSeek(self.virtualpos) > 0:
@@ -118,34 +120,33 @@ class dumpNAVI:
 
   def readHeader(self):
     self.xiphdr.receiveSome(self.virtualRead(sizeof(xipHdr)))
-    
     magic = ''
     for c in self.xiphdr.magic:
       magic += chr(c)
     if magic == 'B000FF\n':
       self.blockstart = self.f.tell()
-      return True
-    return False
+      return 1
+    return 0
 
   def readECEC(self):
-    if self.virtualSeek(self.xiphdr.imageaddr+0x40) == None:
-      return False
+    if self.virtualSeek(self.xiphdr.imageaddr+0x40) == 0:
+      return 0
 
     self.ecechdr.receiveSome(self.virtualRead(sizeof(ececHdr)))
     magic = ''
     for c in self.ecechdr.ECEC:
       magic += chr(c)
     if magic == 'ECEC':
-      return True
-    return False
+      return 1
+    return 0
 
 # need to fix for other file types..
   def readRomHdr(self):
-    if self.virtualSeek(self.ecechdr.romhdraddr) == None:
-      return False
+    if self.virtualSeek(self.ecechdr.romhdraddr) == 0:
+      return 0
     self.romhdr = romHdr()
     self.romhdr.receiveSome(self.virtualRead(sizeof(romHdr)))
-    return True
+    return 1
 
   def extractModule(self, module):
     e32hdr = e32_rom()
@@ -171,13 +172,13 @@ class dumpNAVI:
       print 'Unable to open %s' % name
       return 0
       
-    if self.virtualSeek(module.e32offset) == None:
+    if self.virtualSeek(module.e32offset) == 0:
       print 'Unable to locate e32offset'
       return 0
       
     e32hdr.receiveSome(self.virtualRead(sizeof(e32_rom)))
             
-    if self.virtualSeek(module.o32offset) == None:
+    if self.virtualSeek(module.o32offset) == 0:
       print 'Unable to locate o32offset'
       return 0
 
@@ -326,7 +327,7 @@ class dumpNAVI:
       dataofslist = datalenlist = o32hdr[j].o32_psize
       dataofslist = r.tell()
       buf = ''
-      if self.virtualSeek(o32hdr[j].o32_dataptr) == None:
+      if self.virtualSeek(o32hdr[j].o32_dataptr) == 0:
         print 'Unable to read block file'
         return 0
       buf = self.virtualRead(o32hdr[j].o32_psize)
@@ -357,7 +358,7 @@ class dumpNAVI:
     pass
      
   def readModules(self):
-    if self.virtualSeek(self.ecechdr.romhdraddr+sizeof(romHdr)) == None:
+    if self.virtualSeek(self.ecechdr.romhdraddr+sizeof(romHdr)) == 0:
       print 'Unable to read block file\n'
       return 0
     
@@ -370,7 +371,7 @@ class dumpNAVI:
     self.files = []
     
     for module in self.modules:
-      if self.virtualSeek(module.fileaddr) == None:
+      if self.virtualSeek(module.fileaddr) == 0:
         print 'Unable to read block file\n'
         return 0
       
