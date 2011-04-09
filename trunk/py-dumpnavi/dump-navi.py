@@ -81,7 +81,7 @@ class dumpNAVI:
     self.f.seek(self.blockstart, 0)
 
     data = self.f.read(sizeof(blockHdr))    
-    while data != '':
+    while len(data) > 0:
       b = blockHdr()
       self.blockstartpos = self.f.tell()
       b.receiveSome(data)
@@ -105,18 +105,18 @@ class dumpNAVI:
     return self.blocklen
 
   def virtualRead(self, size):
-    data = ''
     origsize = size
+    
     if self.virtualpos == 0:
       data = self.f.read(size)
       return data
+  
     if self.blocklen >= size:
       self.blocklen -= size
       self.virtualpos += size
       data = self.f.read(size)
-      if data == '':
-        return data
       return data
+  
     data = ''
     while size > 0:
       if self.blocklen > 0:
@@ -127,8 +127,9 @@ class dumpNAVI:
         data = data + self.f.read(a)
         if data == '':
           return data
-        size = size - a
-        self.virtualpos = self.virtualpos + a
+        size -= a
+        self.virtualpos += a
+    
       if self.virtualSeek(self.virtualpos) == 0:
         break
     return data
@@ -219,8 +220,8 @@ class dumpNAVI:
       
     pe32.e32_magic[0] = ord('P')
     pe32.e32_magic[1] = ord('E')
-    # sets the CPU type, possibly not necessary
-    pe32.e32_cpu = 0x0300
+
+    pe32.e32_cpu = 0x01A6
     pe32.e32_objcnt = e32hdr.e32_objcnt
       
     t = module.time
@@ -374,7 +375,7 @@ class dumpNAVI:
      
   def readModules(self):
     if self.virtualSeek(self.ecechdr.romhdraddr+sizeof(romHdr)) == 0:
-      print 'Unable to read block file\n'
+      print 'Unable to read block file'
       return 0
     
     for i in range(self.romhdr.nummods):
@@ -384,8 +385,8 @@ class dumpNAVI:
     
     for module in self.modules:
       if self.virtualSeek(module.fileaddr) == 0:
-        print 'Unable to read block file\n'
-        return 0
+        print 'Unable to read block file'
+        continue
       
       name = ''
       n = self.f.read(1)
@@ -409,7 +410,7 @@ class dumpNAVI:
               self.extractModule(module)
 
   def readFiles(self):
-    if self.virtualSeek(self.ecechdr.romhdraddr) + sizeof(romHdr) + (sizeof(moduleHdr)*self.romhdr.nummods) == 0:
+    if self.virtualSeek(self.ecechdr.romhdraddr + sizeof(romHdr) + (sizeof(moduleHdr)*self.romhdr.nummods)) == 0:
       print 'Unable to read block file'
       return 0
        
