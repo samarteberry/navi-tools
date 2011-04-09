@@ -134,6 +134,55 @@ class dumpNAVI:
         break
     return data
 
+  def virtualCalcSum(self):
+    savepos = self.f.tell()
+    self.f.seek(self.blockstartpos)
+    b = blockHdr()
+    b.receiveSome(self.f.read(sizeof(blockHdr)))
+
+    chksum = 0
+    buf = self.f.read(sizeof(b.length))
+    for c in buf:
+      chksum += ord(c)
+    b.chksum = chksum
+
+    self.f.seek(self.blockstartpos)
+    self.f.write(b.send())
+    self.f.seek(savepos)
+
+  def virtualWrite(self, buf):
+    size = len(buf)
+
+    if self.virtualpos == 0:
+      self.f.write(buf)
+      self.virtualCalcSum()
+      return
+
+    if self.blocklen >= size:
+      self.blocklen -= size
+      self.virtualpos += size
+      self.f.write(buf)
+      return
+
+    pos = 0
+    while size:
+      if self.blocklen:
+        if self.blocklen < size:
+          a = self.blocklen
+        else:
+          a = size
+
+        self.f.write(buf[pos:pos+a])
+        self.virtualCalcSum()
+
+        size -= a
+        self.virtualpos += a
+        pos += a
+
+      if(self.virtualSeek(virtualpos) == 0):
+        break
+    return
+
   def readHeader(self):
     self.xiphdr.receiveSome(self.virtualRead(sizeof(xipHdr)))
     magic = ''
@@ -164,46 +213,8 @@ class dumpNAVI:
     self.romhdr.receiveSome(self.virtualRead(sizeof(romHdr)))
     return 1
 
-  def extractModule(self, module):
-    e32hdr = e32_rom()
-    o32hdr = []
-    pe32 = e32_exe()
-    po32 = o32_obj()
+  def writeDOSHeader(self, r):
     dos = IMAGE_DOS_HEADER()
-    newe32off = headersize = filesize = size = None
-    o32hdroff = [] 
-    print 'Extracting %s ...' % module.filename
-    if options.PATH == None:
-      path = options.FILE + '.d'
-    else:
-      path = options.PATH
-
-    if os.path.exists(path) == False:
-      os.mkdir(path)
-
-    fname = path + '/' + module.filename
-
-    r = open(fname, 'w+b')
-    if r is None:
-      print 'Unable to open %s' % name
-      return 0
-      
-    if self.virtualSeek(module.e32offset) == 0:
-      print 'Unable to locate e32offset'
-      return 0
-      
-    e32hdr.receiveSome(self.virtualRead(sizeof(e32_rom)))
-            
-    if self.virtualSeek(module.o32offset) == 0:
-      print 'Unable to locate o32offset'
-      return 0
-
-    for j in range(e32hdr.e32_objcnt):
-      o = o32_rom()
-      data = self.virtualRead(sizeof(o32_rom))
-      o.receiveSome(data)
-      o32hdr.append(o)
-      
     dos.e_magic = IMAGE_DOS_SIGNATURE
     dos.e_cblp = 0x90
     dos.e_cp = 3
@@ -215,9 +226,10 @@ class dumpNAVI:
       
     r.write(dos.send())
     r.write(doscode)
-    r.seek(0x40, os.SEEK_CUR)
-    newe32off = r.tell()
-      
+       
+  def writePEHeader(self, e32hdr, o32hdr, module, r):
+    pe32 = e32_exe()
+    
     pe32.e32_magic[0] = ord('P')
     pe32.e32_magic[1] = ord('E')
 
@@ -294,8 +306,11 @@ class dumpNAVI:
     pe32.e32_unit[RS4].size = e32hdr.e32_sect14size
     
     r.write(pe32.send())
-
-    # write o32 header
+    
+  def writeO32Header(self, e32hdr, o32hdr, r):
+    o32hdroff = []
+    po32 = o32_obj()    
+    
     for j in range(e32hdr.e32_objcnt):
       segtype = None
       o32hdroff.append(r.tell())
@@ -330,7 +345,54 @@ class dumpNAVI:
       po32.o32_access = 0
       po32.o32_temp3 = 0
       po32.o32_flags = o32hdr[j].o32_flags & ~0x2000
-      r.write(po32.send())
+      r.write(po32.send())    
+
+  def extractModule(self, module):
+    e32hdr = e32_rom()
+    o32hdr = []
+    
+    dos = IMAGE_DOS_HEADER()
+    newe32off = headersize = filesize = size = None
+
+    print 'Extracting %s ...' % module.filename
+    if options.PATH == None:
+      path = options.FILE + '.d'
+    else:
+      path = options.PATH
+
+    if os.path.exists(path) == False:
+      os.mkdir(path)
+
+    fname = path + '/' + module.filename
+
+    r = open(fname, 'w+b')
+    if r is None:
+      print 'Unable to open %s' % name
+      return 0
+      
+    if self.virtualSeek(module.e32offset) == 0:
+      print 'Unable to locate e32offset'
+      return 0
+      
+    e32hdr.receiveSome(self.virtualRead(sizeof(e32_rom)))
+            
+    if self.virtualSeek(module.o32offset) == 0:
+      print 'Unable to locate o32offset'
+      return 0
+
+    for j in range(e32hdr.e32_objcnt):
+      o = o32_rom()
+      data = self.virtualRead(sizeof(o32_rom))
+      o.receiveSome(data)
+      o32hdr.append(o)
+    
+    self.writeDOSHeader(r)
+    
+    r.seek(0x40, os.SEEK_CUR)
+    newe32off = r.tell()
+      
+    self.writePEHeader(e32hdr, o32hdr, module, r)
+    self.writeO32Header(e32hdr, o32hdr, r)
 
     size = r.tell()
 
@@ -372,7 +434,46 @@ class dumpNAVI:
 
   def updateModule(self, name):
     pass
-     
+  
+  def extractFile(self, f):
+    e32hdr = e32_rom()
+    o32hdr = []
+    
+    dos = IMAGE_DOS_HEADER()
+    newe32off = headersize = filesize = size = None
+
+    print 'Extracting %s ...' % f.filename
+    if options.PATH == None:
+      path = options.FILE + '.d'
+    else:
+      path = options.PATH
+
+    if os.path.exists(path) == False:
+      os.mkdir(path)
+
+    fname = path + '/' + f.filename
+
+    if self.virtualSeek(f.loadoffset) == 0:
+      print 'Unable to read block file'
+      return 0
+    
+    r = open(fname, 'w+b')
+    if r is None:
+      print 'Unable to open %s' % name
+      return 0
+
+    buf = self.virtualRead(f.size2)
+    if f.attr & FILEATTR_COMPRESS:
+      out = outlen = 0
+      outlen = lzx.CEDecompress(buf, o32hdr[j].o32_psize, out, o32hdr[j].o32_vsize, 0, 1, 4096)
+      if outlen < 0:
+        print 'Error in CEDecompress()'
+      else:
+        r.write(out)
+    else:
+      r.write(buf)
+    return 1
+       
   def readModules(self):
     if self.virtualSeek(self.ecechdr.romhdraddr+sizeof(romHdr)) == 0:
       print 'Unable to read block file'
@@ -434,6 +535,16 @@ class dumpNAVI:
     if options.LIST:
       for f in self.files:
         print f
+    
+    if options.EXTRACT is not None:
+      if options.EXTRACT[0] == 'a':
+        for f in self.files:
+          self.extractFile(f)
+      else:
+        for f in self.files:
+          for fn in options.EXTRACT:
+            if fn == f.filename:
+              self.extractFile(f)
   
 def main():
   navi = dumpNAVI(options.FILE)
