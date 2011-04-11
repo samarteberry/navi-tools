@@ -87,7 +87,7 @@ class dumpNAVI:
       if not b.addr > 0:
         break
 
-      if addr >= b.addr and (addr < b.addr + b.length):
+      if addr >= b.addr and addr < (b.addr + b.length):
         a = addr - b.addr
         self.safeSeek(a, os.SEEK_CUR)
         self.blocklen = b.length - a
@@ -105,7 +105,7 @@ class dumpNAVI:
   def virtualRead(self, size):
     origsize = size
     
-    if self.virtualpos == 0:
+    if not self.virtualpos > 0:
       data = self.f.read(size)
       return data
   
@@ -116,7 +116,7 @@ class dumpNAVI:
       return data
   
     data = ''
-    while size > 0:
+    while size > 0:     
       if self.blocklen > 0:
         if self.blocklen < size:
           a = self.blocklen
@@ -124,13 +124,13 @@ class dumpNAVI:
           a = size
           
         data = data + self.f.read(a)
-        if len(data) == 0:
+        if not len(data) > 0:
           return data
         
         size -= a
         self.virtualpos += a
     
-      if self.virtualSeek(self.virtualpos) == 0:
+      if not self.virtualSeek(self.virtualpos) > 0:
         break
     
     while len(data) < origsize:
@@ -157,11 +157,11 @@ class dumpNAVI:
   def virtualWrite(self, buf):
     size = len(buf)
 
-    if self.virtualpos == 0:
+    if not self.virtualpos > 0:
       self.f.write(buf)
       self.virtualCalcSum()
       return
-
+    
     if self.blocklen >= size:
       self.blocklen -= size
       self.virtualpos += size
@@ -183,7 +183,7 @@ class dumpNAVI:
         self.virtualpos += a
         pos += a
 
-      if(self.virtualSeek(virtualpos) == 0):
+      if not self.virtualSeek(virtualpos) > 0:
         break
     return
 
@@ -239,7 +239,8 @@ class dumpNAVI:
 
     pe32.e32_cpu = 0x01A6
     pe32.e32_objcnt = e32hdr.e32_objcnt
-      
+    
+    # time header is still wrong, but it really doesn't matter.. I think
     t = module.time
     t <<= 32
     t |= module.time2
@@ -315,6 +316,8 @@ class dumpNAVI:
     o32hdroff = []
     po32 = o32_obj()    
     
+    g_segmentNameUsage = [0, 0, 0, 0,0]
+    
     for j in range(e32hdr.e32_objcnt):
       segtype = None
       o32hdroff.append(r.tell())
@@ -333,11 +336,13 @@ class dumpNAVI:
         segtype = ST_OTHER
       
       if g_segmentNameUsage[segtype]:
-        n = c_char_p('%s%ld' % (g_segmentNames[segtype], g_segmentNameUsage[segtype]))
-        memmove(addressof(po32.o32_name), addressof(n), sizeof(n))
+        name = g_segmentNames[segtype] + '%ld' % g_segmentNameUsage[segtype]
+        for k in range(len(name)):
+          po32.o32_name[k] = ord(name[k])
       else:
-        n = c_char_p('%s' % g_segmentNames[segtype])
-        memmove(addressof(po32.o32_name), addressof(n), sizeof(n)) # not that safe, but the sizes are fixed..
+        name = g_segmentNames[segtype]
+        for k in range(len(name)):
+          po32.o32_name[k] = ord(name[k])        
 
       g_segmentNameUsage[segtype] += 1
       
@@ -414,9 +419,6 @@ class dumpNAVI:
         return 0
       buf = self.virtualRead(o32hdr[j].o32_psize)
       
-      if len(buf) != o32hdr[j].o32_psize:
-        print 'error'
-        
       if o32hdr[j].o32_flags & 0x2000:
         out = outlen = 0
         outlen = lzx.CEDecompress(buf, o32hdr[j].o32_psize, out, o32hdr[j].o32_vsize, 0, 1, 4096)

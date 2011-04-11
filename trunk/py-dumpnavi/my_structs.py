@@ -103,12 +103,13 @@ class StructHelper:
     fit = min(len(data), sizeof(self))
     memmove(addressof(self), data, fit)
 
-  _pack_ = 1
   
 class xipHdr(Structure, StructHelper):
   _fields_ = [('magic', c_ubyte*7),
               ('imageaddr', c_uint32),
               ('imagelen', c_uint32)]
+
+  _pack_ = 1  
 
 class ececHdr(Structure, StructHelper):
   _fields_ = [('ECEC', c_ubyte*4),
