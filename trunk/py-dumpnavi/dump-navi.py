@@ -69,7 +69,6 @@ class dumpNAVI:
     self.filesize = os.path.getsize(fileName)
     self.f = open(fileName, 'rb')
     
-
   # added to address python deficiency that allows you to seek past the end of the file
   def safeSeek(self, addr, mode=os.SEEK_CUR):
     self.f.seek(addr, mode)
@@ -77,8 +76,7 @@ class dumpNAVI:
       raise IOError('Attempted to seek past end of file')
     
   def virtualSeek(self, addr):
-    #print '%08X' % addr
-    self.f.seek(self.blockstart, 0)
+    self.safeSeek(self.blockstart, os.SEEK_SET)
 
     data = self.f.read(sizeof(blockHdr))    
     while len(data) > 0:
@@ -86,7 +84,7 @@ class dumpNAVI:
       self.blockstartpos = self.f.tell()
       b.receiveSome(data)
       
-      if b.addr == 0:
+      if not b.addr > 0:
         break
 
       if addr >= b.addr and (addr < b.addr + b.length):
@@ -124,14 +122,20 @@ class dumpNAVI:
           a = self.blocklen
         else:
           a = size
+          
         data = data + self.f.read(a)
-        if data == '':
+        if len(data) == 0:
           return data
+        
         size -= a
         self.virtualpos += a
     
       if self.virtualSeek(self.virtualpos) == 0:
         break
+    
+    while len(data) < origsize:
+      data += '\00'
+    
     return data
 
   def virtualCalcSum(self):
@@ -409,6 +413,10 @@ class dumpNAVI:
         print 'Unable to read block file'
         return 0
       buf = self.virtualRead(o32hdr[j].o32_psize)
+      
+      if len(buf) != o32hdr[j].o32_psize:
+        print 'error'
+        
       if o32hdr[j].o32_flags & 0x2000:
         out = outlen = 0
         outlen = lzx.CEDecompress(buf, o32hdr[j].o32_psize, out, o32hdr[j].o32_vsize, 0, 1, 4096)

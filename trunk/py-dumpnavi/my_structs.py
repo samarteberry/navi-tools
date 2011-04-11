@@ -104,6 +104,7 @@ class StructHelper:
     memmove(addressof(self), data, fit)
 
   _pack_ = 1
+  
 class xipHdr(Structure, StructHelper):
   _fields_ = [('magic', c_ubyte*7),
               ('imageaddr', c_uint32),
