@@ -312,8 +312,7 @@ class dumpNAVI:
     
     r.write(pe32.send())
     
-  def writeO32Header(self, e32hdr, o32hdr, r):
-    o32hdroff = []
+  def writeO32Header(self, e32hdr, o32hdr, o32hdroff, r):
     po32 = o32_obj()    
     
     g_segmentNameUsage = [0, 0, 0, 0,0]
@@ -401,7 +400,9 @@ class dumpNAVI:
     newe32off = r.tell()
       
     self.writePEHeader(e32hdr, o32hdr, module, r)
-    self.writeO32Header(e32hdr, o32hdr, r)
+    
+    o32hdroff = []
+    self.writeO32Header(e32hdr, o32hdr, o32hdroff, r)
 
     size = r.tell()
 
@@ -432,9 +433,11 @@ class dumpNAVI:
       size = r.tell()
       if size % 0x200:
         r.seek(0x200 - (size % 0x200), os.SEEK_CUR)
-        r.write(buffer(c_ulong(datalenlist))[:])
-        r.write(buffer(c_ulong(dataofslist))[:])
-    r.seek(0, os.SEEK_END)
+      r.seek(o32hdroff[j] + 16, os.SEEK_SET)
+      r.write(buffer(c_ulong(datalenlist))[:])
+      r.write(buffer(c_ulong(dataofslist))[:])
+
+      r.seek(0, os.SEEK_END)
     filesize = r.tell()
     r.seek(newe32off+0x54, os.SEEK_SET)
     r.write(buffer(c_ulong(headersize))[:])
