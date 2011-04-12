@@ -105,7 +105,7 @@ class dumpNAVI:
   def virtualRead(self, size):
     origsize = size
     
-    if not self.virtualpos > 0:
+    if self.virtualpos == 0:
       data = self.f.read(size)
       return data
   
@@ -116,26 +116,20 @@ class dumpNAVI:
       return data
   
     data = ''
-    while size > 0:     
+    while size > 0:
       if self.blocklen > 0:
         if self.blocklen < size:
           a = self.blocklen
         else:
           a = size
-          
         data = data + self.f.read(a)
-        if not len(data) > 0:
+        if data == '':
           return data
-        
         size -= a
         self.virtualpos += a
     
-      if not self.virtualSeek(self.virtualpos) > 0:
+      if self.virtualSeek(self.virtualpos) == 0:
         break
-    
-    while len(data) < origsize:
-      data += '\00'
-    
     return data
 
   def virtualCalcSum(self):
@@ -145,7 +139,7 @@ class dumpNAVI:
     b.receiveSome(self.f.read(sizeof(blockHdr)))
 
     chksum = 0
-    buf = self.f.read(sizeof(b.length))
+    buf = self.f.read(b.length)
     for c in buf:
       chksum += ord(c)
     b.chksum = chksum
@@ -183,7 +177,7 @@ class dumpNAVI:
         self.virtualpos += a
         pos += a
 
-      if not self.virtualSeek(virtualpos) > 0:
+      if not self.virtualSeek(self.virtualpos) > 0:
         break
     return
 
@@ -315,7 +309,7 @@ class dumpNAVI:
   def writeO32Header(self, e32hdr, o32hdr, o32hdroff, r):
     po32 = o32_obj()    
     
-    g_segmentNameUsage = [0, 0, 0, 0,0]
+    g_segmentNameUsage = [0, 0, 0, 0, 0]
     
     for j in range(e32hdr.e32_objcnt):
       segtype = None
@@ -445,9 +439,60 @@ class dumpNAVI:
     r.close()
     return 1
 
-  def updateModule(self, name):
-    pass
-  
+  def updateModule(self, module, filename):
+    print 'Updating module %s ...' % module.filename
+
+    if not os.path.exists(filename):
+      print 'Unable to locate file %s' % filename
+      return 0
+
+    r = open(filename, 'rb')
+
+    if self.virtualSeek(module.e32offset) == 0:
+      print 'Unable to locate e32offset'
+      return 0
+
+    e32hdr = e32_rom()
+    e32hdr.receiveSome(self.virtualRead(sizeof(e32_rom)))
+
+    if self.virtualSeek(module.o32offset) == 0:
+      print 'Unable to locate o32offset'
+      return 0
+
+    o32hdr = []
+    for j in range(e32hdr.e32_objcnt):
+      b = o32_rom()
+      b.receiveSome(self.virtualRead(sizeof(o32_rom)))
+      o32hdr.append(b)
+
+    # @TODO Add check to see if supplied dll # of sections matches # of sections in file being updated
+    headersize = sizeof(IMAGE_DOS_HEADER) + len(doscode) + sizeof(e32_exe) + (sizeof(o32_obj)*e32hdr.e32_objcnt)
+
+    if headersize % 0x200:
+      headersize += 0x200 - (headersize % 0x200)
+
+    r.seek(headersize)
+
+    for j in range(e32hdr.e32_objcnt):
+      if self.virtualSeek(o32hdr[j].o32_dataptr) == 0:
+        print 'Unable to read block file'
+        return 0
+      
+      data = r.read(o32hdr[j].o32_psize)
+
+      # @TODO Add support for updating compressed files
+      if o32hdr[j].o32_flags & 0x2000:
+        print 'The module uses compression is currently not supported'
+        return 0
+      else:
+        self.virtualWrite(data)
+
+      size = r.tell()
+      if size % 0x200:
+        r.seek(0x200 - (size % 0x200), os.SEEK_CUR)
+        
+    return 1
+      
   def extractFile(self, f):
     e32hdr = e32_rom()
     o32hdr = []
@@ -520,8 +565,32 @@ class dumpNAVI:
       else:
         for module in self.modules:
           for fn in options.EXTRACT:
-            if fn == module.filename:
+            if module.filename in fn:
               self.extractModule(module)
+              
+    if options.UPDATE is not None:
+      
+      #make a copy of the current file
+      curr_offset = self.f.tell()
+      self.f.seek(0, os.SEEK_SET)
+      of = open(options.PATH, 'w+b')
+      of.seek(0, os.SEEK_SET)
+      of.write(self.f.read(self.filesize))
+      of.seek(curr_offset, os.SEEK_SET)
+      
+      #use the copy to make the modifications
+      old_file = self.f
+      self.f = of
+      
+      for module in self.modules:
+        for fn in options.UPDATE:
+          if module.filename in fn:
+            self.updateModule(module, fn)
+      
+      curr_offset = of.tell()
+      of.close()
+      self.f = old_file
+      self.f.seek(curr_offset, os.SEEK_SET)
 
   def readFiles(self):
     if self.virtualSeek(self.ecechdr.romhdraddr + sizeof(romHdr) + (sizeof(moduleHdr)*self.romhdr.nummods)) == 0:
@@ -604,6 +673,10 @@ if __name__ == '__main__':
   (options, args) = parser.parse_args()
   if options.FILE == None:
     parser.print_help()
-  else:
-    main()
+    exit(0)
+  if options.UPDATE != None:
+    if len(options.PATH) == 0:
+      print 'Output file needed with update option'
+      exit(0)
+  main()
 
